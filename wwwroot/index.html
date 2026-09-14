@@ -1,0 +1,230 @@
+﻿<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Keyboard Remapping Service</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 900px;
+            margin: 40px auto;
+        }
+
+        select, button {
+            padding: 8px;
+            margin: 5px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        th, td {
+            border: 1px solid #ccc;
+            padding: 8px;
+        }
+
+        th {
+            background-color: #eee;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>Keyboard Remapping Service</h1>
+
+    <label for="keyboardSelect">Clavier :</label>
+    <select id="keyboardSelect"></select>
+
+    <button onclick="saveMappings()">
+        Enregistrer
+    </button>
+
+    <p id="message"></p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Touche physique</th>
+                <th>Code HID</th>
+                <th>Mapping</th>
+            </tr>
+        </thead>
+
+        <tbody id="mappingTable"></tbody>
+    </table>
+
+
+    <script>
+
+        let currentMappings = [];
+
+
+        // Charge les claviers disponibles
+        async function loadKeyboards() {
+
+            const response = await fetch('/api/keyboards');
+            const keyboards = await response.json();
+
+            const select =
+                document.getElementById('keyboardSelect');
+
+            select.innerHTML = '';
+
+            keyboards.forEach(keyboard => {
+
+                const option = document.createElement('option');
+
+                option.value = keyboard.id;
+                option.textContent = keyboard.name;
+
+                select.appendChild(option);
+            });
+
+            select.addEventListener('change', loadMappings);
+
+            if (keyboards.length > 0) {
+                await loadMappings();
+            }
+        }
+
+
+        // Charge les mappings du clavier sélectionné
+        async function loadMappings() {
+
+            const keyboardId =
+                document.getElementById('keyboardSelect').value;
+
+            const response =
+                await fetch(
+                    `/api/keyboards/${keyboardId}/mappings`
+                );
+
+            currentMappings = await response.json();
+
+            displayMappings();
+        }
+
+
+        // Affiche les mappings
+        function displayMappings() {
+
+            const table =
+                document.getElementById('mappingTable');
+
+            table.innerHTML = '';
+
+            currentMappings.forEach(mapping => {
+
+                const row = document.createElement('tr');
+
+                // Touche physique
+                const sourceCell = document.createElement('td');
+                sourceCell.textContent = mapping.sourceKey;
+
+                // Code HID
+                const codeCell = document.createElement('td');
+                codeCell.textContent = mapping.sourceKeyCode;
+
+                // Liste déroulante des touches cibles
+                const targetCell = document.createElement('td');
+                const select = document.createElement('select');
+
+                select.dataset.sourceCode =
+                    mapping.sourceKeyCode;
+
+                currentMappings.forEach(target => {
+
+                    const option =
+                        document.createElement('option');
+
+                    option.value = target.sourceKeyCode;
+                    option.textContent = target.sourceKey;
+
+                    if (
+                        target.sourceKeyCode ===
+                        mapping.targetKeyCode
+                    ) {
+                        option.selected = true;
+                    }
+
+                    select.appendChild(option);
+                });
+
+                targetCell.appendChild(select);
+
+                row.appendChild(sourceCell);
+                row.appendChild(codeCell);
+                row.appendChild(targetCell);
+
+                table.appendChild(row);
+            });
+        }
+
+
+        // Enregistre les mappings
+        async function saveMappings() {
+
+            const keyboardId =
+                document.getElementById('keyboardSelect').value;
+
+            const selects =
+                document.querySelectorAll(
+                    '#mappingTable select'
+                );
+
+            const mappings = [];
+
+            selects.forEach(select => {
+
+                mappings.push({
+                    from: Number(select.dataset.sourceCode),
+                    to: Number(select.value)
+                });
+            });
+
+            const response = await fetch(
+                `/api/keyboards/${keyboardId}/mappings`,
+                {
+                    method: 'POST',
+
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+
+                    body: JSON.stringify({
+                        mappings: mappings
+                    })
+                }
+            );
+
+            const message =
+                document.getElementById('message');
+
+            if (response.ok) {
+
+                message.textContent =
+                    'Mappings enregistrés avec succès.';
+
+                await loadMappings();
+            }
+            else {
+
+                const error = await response.text();
+
+                message.textContent =
+                    'Erreur : ' + error;
+            }
+        }
+
+
+        loadKeyboards();
+
+    </script>
+
+</body>
